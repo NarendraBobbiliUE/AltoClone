@@ -1,0 +1,98 @@
+# =============== #
+# Unity Generated #
+# =============== #
+
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+UserSettings/
+
+# Prevent storing Unity’s cache and crashes
+sysinfo.txt
+*.stacktrace
+
+# ============== #
+# Unity Collab    #
+# ============== #
+Collab/
+
+# ============== #
+# Addressables    #
+# ============== #
+/Assets/AddressableAssetsData/*/*.bin
+/Assets/AddressableAssetsData/*/*.bin*
+/Assets/AddressableAssetsData/*/*.hash
+/Assets/AddressableAssetsData/*/*.json
+/Assets/StreamingAssets/aa/*
+
+# ============== #
+# Plastic SCM     #
+# ============== #
+/.plastic/
+plastic-temp/
+
+# ====================== #
+# Visual Studio / Rider  #
+# ====================== #
+
+# VS
+.vs/
+*.csproj
+*.sln
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+
+# Rider
+.idea/
+*.sln.iml
+
+# ====================== #
+# Unity Collaborate / UPM#
+# ====================== #
+
+# Package cache
+/Packages/packages-lock.json
+
+# ======== #
+# TextMeshPro
+# ======== #
+/Assets/TextMesh Pro/*/*.asset
+
+# ================== #
+# Crash Reports       #
+# ================== #
+/CrashReports/
+
+# ======== #
+# Misc     #
+# ======== #
+*.apk
+*.aab
+*.unitypackage
+*.DS_Store
+*.swp
+*.tmp
+*.temp
+*.orig
+*.log
+
+# =============== #
+# Build Artifacts #
+# =============== #
+*/[Bb]uilds/*
+*/[Rr]eleases/*
+*.exe
+*.dll
+*.so
+*.dylib
+*.app
+*.ipa
