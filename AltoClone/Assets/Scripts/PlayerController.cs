@@ -1,60 +1,143 @@
-using System;
 using UnityEngine;
 
-[RequireComponent(typeof(Rigidbody))]
-[RequireComponent(typeof(CapsuleCollider))]
+/// <summary>
+/// Controls player movement, jumping, air tricks, and landing validation.
+/// Designed for SpriteShape + Rigidbody2D terrain.
+/// </summary>
+[RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(Collider2D))]
 public class PlayerController : MonoBehaviour
 {
+    /* =========================
+     * MOVEMENT
+     * ========================= */
+
     [Header("Movement")]
-    [SerializeField] protected float m_downhillForce = 30f;
-    [SerializeField] protected float m_maxSpeed = 12f;
-    [SerializeField] protected float m_slopeAlignSpeed = 10f;
 
-    [Header("Ground Check")]
-    [SerializeField] protected float m_groundCheckDistance = 1.2f;
-    [SerializeField] protected LayerMask m_groundLayer;
+    [Tooltip("Constant forward speed along the X axis")]
+    [SerializeField] private float m_forwardSpeed = 6f;
 
-    [Header("Jump")]
-    [SerializeField] protected float m_jumpForce = 8f;
+    [Tooltip("Upward velocity applied when jumping")]
+    [SerializeField] private float m_jumpVelocity = 12f;
 
-    [Header("Air Rotation")]
-    [SerializeField] protected float m_airRotationSpeed = 360f;
+    /* =========================
+     * AIR TRICKS
+     * ========================= */
 
-    [Header("Landing Validation")]
+    [Header("Air Tricks")]
+
+    [Tooltip("Degrees per second the player rotates while holding input in air")]
+    [SerializeField] private float m_airRotationSpeed = 360f;
+
+    [Tooltip("Minimum alignment dot product required for a safe landing")]
     [Range(0f, 1f)]
-    protected float m_minLandingDot = 0.85f;
+    [SerializeField] private float m_minLandingDot = 0.85f;
 
-    [Header("Ground Adhesion")]
-    [SerializeField] protected float m_groundSnapDistance = 0.3f;
+    /* =========================
+     * STATE (READ ONLY)
+     * ========================= */
 
-    [SerializeField] protected float m_groundedGraceTime = 0.1f;
+    [Header("Runtime State (Read Only)")]
 
-    [SerializeField] protected float m_jumpVelocityThreshold = 1.0f;
+    [Tooltip("True when the player is currently touching the ground")]
+    private bool m_isGrounded;
 
-    protected float m_lastGroundedTime;
-    protected bool m_hasCrashed;
-    protected float m_airRotationAccumulated;
-    protected bool m_wasGroundedLastFrame;
-    protected int m_completedFlips;
+    [Tooltip("True once the player has crashed")]
+     private bool m_hasCrashed;
 
-    protected Rigidbody m_rb;
-    protected CapsuleCollider m_capsule;
+    [Tooltip("Number of completed flips during the current jump")]
+    private int m_completedFlips;
 
-    protected bool m_isGrounded;
-    protected Vector3 m_groundNormal = Vector3.up;
-    protected bool m_isJumpRequested;
+    [Header("Landing Detection")]
 
-    //  Capsule geometry
-    protected float m_capsuleBottomOffset;
+    [Tooltip("Minimum time the player must be airborne before a landing is validated")]
+    [SerializeField] private float m_minAirTimeForLanding = 0.1f;
+
+    [Header("Restart")]
+
+    [Tooltip("Delay before restart input is accepted after crash")]
+    [SerializeField] private float m_restartDelay = 0.5f;
+
+
+
+    /* =========================
+     * INTERNAL
+     * ========================= */
+
+    private Rigidbody2D m_rb;
+
+    // Accumulated Z rotation in air (degrees)
+    private float m_airRotationAccumulated;
+
+    // Ground normal from last collision
+    private Vector2 m_groundNormal = Vector2.up;
+
+    // Track grounded state change
+    private bool m_wasGroundedLastFrame;
+
+    private float m_airTime;
+    private float m_timeSinceCrash;
+
+
+    /* =========================
+     * UNITY LIFECYCLE
+     * ========================= */
 
     void Awake()
     {
-        m_rb = GetComponent<Rigidbody>();
-        m_capsule = GetComponent<CapsuleCollider>();
+        m_rb = GetComponent<Rigidbody2D>();
 
-        // Distance from center to bottom of capsule
-        m_capsuleBottomOffset =
-            (m_capsule.height * 0.5f) - m_capsule.radius;
+        // We control rotation manually
+        m_rb.freezeRotation = true;
+
+    }
+
+    public void Restart(Vector3 startPosition)
+    {
+        // Reset state
+        m_hasCrashed = false;
+        m_isGrounded = false;
+        m_wasGroundedLastFrame = false;
+        m_airRotationAccumulated = 0f;
+        m_completedFlips = 0;
+        m_airTime = 0f;
+        m_timeSinceCrash = 0f;
+
+        // Reset transform
+        transform.position = startPosition;
+       
+
+        // Reset physics
+        m_rb.simulated = true;
+        m_rb.velocity = Vector2.zero;
+        m_rb.angularVelocity = 0f;
+
+        m_timeSinceCrash = 0f;
+        m_rb.SetRotation(0f);
+    }
+
+
+    void Update()
+    {
+        if (m_hasCrashed)
+        {
+            m_timeSinceCrash += Time.deltaTime;
+
+            if (m_timeSinceCrash >= m_restartDelay &&
+                Input.GetMouseButtonDown(1))
+            {
+                FindObjectOfType<RestartManager>().RestartGame();
+            }
+
+            return;
+        }
+
+        HandleJumpInput();
+        HandleAirRotation();
+        if (!m_isGrounded)
+        {
+            m_airTime += Time.deltaTime;
+        }
     }
 
     void FixedUpdate()
@@ -62,195 +145,134 @@ public class PlayerController : MonoBehaviour
         if (m_hasCrashed)
             return;
 
-        GroundCheck();
+        MoveForward();
+        DetectLandingTransition();
 
-        if (m_isJumpRequested)
-        {
-            Jump();
-            m_isJumpRequested = false;
-        }
-
-        if (!m_isGrounded)
-        {
-            HandleAirRotation();
-        }
-        else if (m_isGrounded && !m_wasGroundedLastFrame)
-        {
-            if (m_groundNormal != Vector3.zero)
-            {
-                OnLanded();
-            }
-        }
-
-        MoveDownhill();
-        AlignToSlope();
-        ApplyGroundSnap();
-        LockZPosition();
-
-        m_wasGroundedLastFrame = m_isGrounded;
+        
     }
 
-    void Update()
+    /* =========================
+     * MOVEMENT
+     * ========================= */
+
+    void MoveForward()
     {
-        if (Input.GetKeyDown(KeyCode.Mouse0) && m_isGrounded)
+        // Preserve Y velocity (gravity), enforce constant X speed
+        m_rb.velocity = new Vector2(
+            m_forwardSpeed,
+            m_rb.velocity.y
+        );
+    }
+
+    void HandleJumpInput()
+    {
+        if (Input.GetMouseButtonDown(0) && m_isGrounded)
         {
-            m_isJumpRequested = true;
+            m_rb.velocity = new Vector2(
+                m_rb.velocity.x,
+                m_jumpVelocity
+            );
+
+            m_isGrounded = false;
+            m_airTime = 0f;
         }
     }
+
+    /* =========================
+     * AIR TRICKS
+     * ========================= */
 
     void HandleAirRotation()
     {
+        if (m_isGrounded)
+            return;
+
         if (Input.GetMouseButton(0))
         {
             float rotationThisFrame =
-                m_airRotationSpeed * Time.fixedDeltaTime;
+                m_airRotationSpeed * Time.deltaTime;
 
-            transform.Rotate(Vector3.forward, rotationThisFrame);
+            transform.Rotate(0f, 0f, rotationThisFrame);
+
             m_airRotationAccumulated += rotationThisFrame;
 
             if (m_airRotationAccumulated >= 360f)
             {
                 m_completedFlips++;
                 m_airRotationAccumulated -= 360f;
-                Debug.Log("Backflip! Total: " + m_completedFlips);
+
+                Debug.Log("Flip! Total: " + m_completedFlips);
             }
         }
     }
 
-    void OnLanded()
+    /* =========================
+     * LANDING / CRASH
+     * ========================= */
+
+    void DetectLandingTransition()
     {
-        ValidateLanding();
-        m_airRotationAccumulated = 0f;
+        if (m_isGrounded && !m_wasGroundedLastFrame )
+        {
+            if (m_airTime >= m_minAirTimeForLanding)
+            {
+                ValidateLanding();
+            }
+
+
+            // Reset air state
+            m_airTime = 0f;
+            m_airRotationAccumulated = 0f;
+            m_completedFlips = 0;
+        }
+
+        m_wasGroundedLastFrame = m_isGrounded;
     }
 
     void ValidateLanding()
     {
-        if (m_hasCrashed)
-            return;
-
-        if (m_groundNormal == Vector3.zero)
-            return;
-
-        float alignment =
-            Vector3.Dot(transform.up.normalized, m_groundNormal.normalized);
+        Vector2 up = transform.up;
+        float alignment = Vector2.Dot(up.normalized, m_groundNormal.normalized);
 
         if (alignment < m_minLandingDot)
+        {
             Crash();
+        }
+        else
+        {
+            Debug.Log("Clean landing! Alignment: " + alignment.ToString("F2"));
+        }
     }
 
     void Crash()
     {
         m_hasCrashed = true;
 
-        m_rb.velocity = Vector3.zero;
-        m_rb.angularVelocity = Vector3.zero;
+        Debug.Log("CRASH!");
 
-        m_rb.constraints = RigidbodyConstraints.FreezeAll;
+        // Stop motion completely
+        m_rb.velocity = Vector2.zero;
+        m_rb.simulated = false;
     }
 
-    void GroundCheck()
-    {
-        RaycastHit hit;
-        float rayLength = m_groundCheckDistance + m_capsuleBottomOffset;
+    /* =========================
+     * COLLISIONS
+     * ========================= */
 
-        if (Physics.Raycast(
-            transform.position,
-            Vector3.down,
-            out hit,
-            rayLength,
-            m_groundLayer))
-        {
-            m_isGrounded = true;
-            m_groundNormal = hit.normal;
-            m_lastGroundedTime = Time.time;
-        }
-        else
-        {
-            m_isGrounded = Time.time - m_lastGroundedTime < m_groundedGraceTime;
-        }
-    }
-
-    void MoveDownhill()
+    void OnCollisionEnter2D(Collision2D collision)
     {
-        if (!m_isGrounded)
+        if (collision.contactCount == 0)
             return;
 
-        Vector3 downhillDirection =
-            Vector3.ProjectOnPlane(Vector3.right, m_groundNormal).normalized;
+        // Take the first contact as ground
+        ContactPoint2D contact = collision.GetContact(0);
 
-        m_rb.AddForce(downhillDirection * m_downhillForce, ForceMode.Acceleration);
-
-        Vector3 velocity = m_rb.velocity;
-        velocity.z = 0f;
-
-        if (velocity.magnitude > m_maxSpeed)
-            velocity = velocity.normalized * m_maxSpeed;
-
-        m_rb.velocity = velocity;
+        m_groundNormal = contact.normal;
+        m_isGrounded = true;
     }
 
-    void AlignToSlope()
+    void OnCollisionExit2D(Collision2D collision)
     {
-        if (!m_isGrounded)
-            return;
-
-        Quaternion targetRotation =
-            Quaternion.FromToRotation(transform.up, m_groundNormal) * transform.rotation;
-
-        transform.rotation = Quaternion.Slerp(
-            transform.rotation,
-            targetRotation,
-            Time.fixedDeltaTime * m_slopeAlignSpeed
-        );
-    }
-
-    void LockZPosition()
-    {
-        Vector3 position = transform.position;
-        position.z = 0f;
-        transform.position = position;
-    }
-
-    void Jump()
-    {
-        Vector3 velocity = m_rb.velocity;
-        velocity.y = 0f;
-        m_rb.velocity = velocity;
-
-        m_rb.AddForce(Vector3.up * m_jumpForce, ForceMode.VelocityChange);
         m_isGrounded = false;
-    }
-
-    //  FIXED GROUND SNAP
-    void ApplyGroundSnap()
-    {
-        if (!m_isGrounded)
-            return;
-
-        RaycastHit hit;
-        float rayLength = m_groundSnapDistance + m_capsuleBottomOffset;
-
-        if (!Physics.Raycast(
-            transform.position,
-            Vector3.down,
-            out hit,
-            rayLength,
-            m_groundLayer))
-            return;
-
-        float distanceToGround =
-            hit.distance - m_capsuleBottomOffset;
-
-        // Only snap if very close to ground
-        if (distanceToGround > 0.05f)
-            return;
-
-        // Ignore real jumps, allow solver noise
-        if (m_rb.velocity.y > m_jumpVelocityThreshold)
-            return;
-
-        Vector3 pos = transform.position;
-        pos.y = hit.point.y + m_capsuleBottomOffset;
-        transform.position = pos;
     }
 }
