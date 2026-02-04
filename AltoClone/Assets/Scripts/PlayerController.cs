@@ -27,6 +27,11 @@ public class PlayerController : MonoBehaviour
     [Tooltip("Delay before restart input is accepted")]
     [SerializeField] private float m_restartDelay = 0.5f;
 
+
+    [Header("Ground Alignment")]
+    [SerializeField] private float m_groundAlignSpeed = 12f;
+    [SerializeField] private float m_maxAlignAngle = 60f;
+
     private Rigidbody2D m_rb;
 
     private bool m_isGrounded;
@@ -185,4 +190,29 @@ public class PlayerController : MonoBehaviour
     {
         m_isGrounded = false;
     }
+
+    void AlignToGround()
+    {
+        // Desired angle from ground normal
+        float targetAngle =
+            Mathf.Atan2(m_groundNormal.y, m_groundNormal.x) * Mathf.Rad2Deg - 90f;
+
+        // Clamp to avoid insane rotations
+        targetAngle = Mathf.Clamp(
+            targetAngle,
+            -m_maxAlignAngle,
+            m_maxAlignAngle
+        );
+
+        float newAngle = Mathf.LerpAngle(
+            m_rb.rotation,
+            targetAngle,
+            Time.fixedDeltaTime * m_groundAlignSpeed
+        );
+
+        m_rb.MoveRotation(newAngle);
+    }
+
 }
+
+

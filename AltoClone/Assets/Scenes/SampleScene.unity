@@ -476,12 +476,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_player: {fileID: 336721088}
-  m_segmentLength: 5
+  m_segmentLength: 4
   m_initialSegments: 20
   m_keepSegmentsBehind: 5
-  m_minSlope: -15
-  m_maxSlope: 10
-  m_maxSlopeDelta: 4
+  m_downhillSegmentRange: {x: 10, y: 25}
+  m_downhillSlopeRange: {x: -60, y: -10}
+  m_rampSegmentRange: {x: 3, y: 6}
+  m_rampSlopeRange: {x: 6, y: 40}
+  m_uphillSlopeChangeSpeed: 10
+  m_downhillSlopeChangeSpeed: 4
+  m_tangentStrength: 0.5
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
