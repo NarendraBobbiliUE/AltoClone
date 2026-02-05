@@ -100,7 +100,7 @@ public class InfiniteTerrain : MonoBehaviour
 
     void ExtendIfNeeded()
     {
-        if (m_player.position.x + m_segmentLength * 5f > m_currentX)
+        if (m_player.position.x + m_segmentLength * 15f > m_currentX)
         {
             AddSegment();
         }

@@ -574,7 +574,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.17, y: 12.59, z: -10}
+  m_LocalPosition: {x: 7.17, y: 12.59, z: -16.47}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -690,12 +690,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4aea137fa96374247ae37ca8d37892ee, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_forwardSpeed: 15
+  m_MovementSpeed: 2
   m_jumpVelocity: 12
-  m_airRotationSpeed: 360
+  m_BackFlipRotSpeed: 360
+  m_FwFlipRotSpeed: 30
   m_minLandingDot: 0.85
-  m_minAirTimeForLanding: 0.1
   m_restartDelay: 0.5
+  m_groundAlignSpeed: 12
+  m_maxAlignAngle: 60
+  m_stickToGroundForce: 30
+  m_maxSnapUpwardNormalVelocity: 0.2
+  m_minTimeOffGround: 0.08
 --- !u!70 &336721085
 CapsuleCollider2D:
   m_ObjectHideFlags: 0
@@ -1105,7 +1110,7 @@ Transform:
   m_GameObject: {fileID: 1037240049}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.17, y: 12.59, z: -10}
+  m_LocalPosition: {x: 7.17, y: 12.59, z: -16.47}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1159,7 +1164,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_BindingMode: 1
-  m_FollowOffset: {x: 7.17, y: 0, z: -10}
+  m_FollowOffset: {x: 7.17, y: 0, z: -16.47}
   m_XDamping: 1
   m_YDamping: 1
   m_ZDamping: 1
