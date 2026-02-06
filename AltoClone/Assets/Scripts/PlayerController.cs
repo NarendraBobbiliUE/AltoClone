@@ -8,16 +8,17 @@ public class PlayerController : MonoBehaviour
      * MOVEMENT
      * ============================= */
 
-    [Header("Movement")]
 
-    [Tooltip("Constant movement speed along the X axis")]
-    [SerializeField] private float m_MovementSpeed = 6f;
 
     [Tooltip("Max movement speed along the slope")]
-    [SerializeField] private float m_MaxSpeedAlongSlope = 10.0f;
+    [SerializeField] private float m_MaxSpeedAlongSlope = 40f;
 
     [Tooltip("Min movement speed along the slope")]
-    [SerializeField] private float m_MinSpeedAlongSlope = 2.0f;
+    [SerializeField] private float m_MinSpeedAlongSlope = 8f;
+
+    [SerializeField]
+    private float m_SlopeSpeedAcceleration = 8f;
+
 
     [Tooltip("Upward velocity applied when the player jumps")]
     [SerializeField] private float m_jumpVelocity = 12f;
@@ -78,7 +79,7 @@ public class PlayerController : MonoBehaviour
     [Header("Grounded State Stability")]
 
     [Tooltip("Minimum time the player must be off the ground before becoming ungrounded (prevents jitter)")]
-    [SerializeField] private float m_minTimeOffGround = 0.08f; // NEW
+    [SerializeField] private float m_minTimeOffGround = 0.08f;
 
     /* =============================
      * INTERNAL STATE
@@ -112,7 +113,11 @@ public class PlayerController : MonoBehaviour
     private float m_timeSinceCrash;
 
     [Tooltip("Time elapsed since last valid ground contact")]
-    private float m_timeSinceLastGroundContact; // NEW
+    private float m_timeSinceLastGroundContact;
+
+
+    [Tooltip("The currentSlopeSpeedOfPlayer")]
+    private float m_currentSlopeSpeed;
 
     /* =============================
      * UNITY LIFECYCLE
@@ -124,6 +129,7 @@ public class PlayerController : MonoBehaviour
 
         // Physics should never control rotation (visual-only rotation model)
         m_rb.freezeRotation = true;
+        m_currentSlopeSpeed = 0;
     }
 
     void Update()
@@ -141,6 +147,7 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
+        
         HandleJumpInput();
 
         if (!m_isGrounded)
@@ -158,7 +165,7 @@ public class PlayerController : MonoBehaviour
             m_isJumping = false;
         }
 
-        // NEW: Passive ungrounding with hysteresis
+        // Passive ungrounding with hysteresis
         if (!m_isJumping && m_isGrounded)
         {
             m_timeSinceLastGroundContact += Time.fixedDeltaTime;
@@ -171,37 +178,67 @@ public class PlayerController : MonoBehaviour
 
         if (m_isGrounded)
         {
-            ApplyGroundAdhesion();
-            AlignToGround();
 
             MoveOnSlope();
+            ApplyGroundAdhesion();
+          
+            AlignToGround();
         }
-
-
-        if (m_isGrounded == false)
+        else
         {
             HandleAirRotation();
         }
+
         DetectLandingTransition();
     }
 
     /* =============================
      * MOVEMENT
      * ============================= */
-
     void MoveOnSlope()
     {
+        // Direction along the slope (perpendicular to ground normal)
         Vector2 slopeDir = new Vector2(m_groundNormal.y, -m_groundNormal.x);
 
-        if (slopeDir.y > 0f)
-        {
-            slopeDir = -slopeDir;  //Since in our game we move towards +ve X OR right side of the screen.
-        }
-            
-        Vector2 moveForce = m_MovementSpeed * slopeDir;
+        // Ensure movement is always towards +X (right side of screen)
+        Vector2 moveDirection = slopeDir;
+        if (slopeDir.x < 0f)
+            moveDirection = -slopeDir;
 
-        m_rb.AddRelativeForce(moveForce);
+        slopeDir.Normalize();
+        moveDirection.Normalize();
+
+        Vector2 velocity = m_rb.velocity;
+
+
+      
+        // Extract speed along the slope
+        float currSpeedAlongSlope = Vector2.Dot(velocity, moveDirection);
+
+
+        // Project gravity onto slope direction
+        // This gives signed downhill / uphill factor
+        float signedSlopeFactor =
+        Vector2.Dot(Vector2.down, slopeDir);
+
+        // Apply baseline movement
+        float DesiredSpeedAlongSlope = currSpeedAlongSlope + m_SlopeSpeedAcceleration * signedSlopeFactor * Time.fixedDeltaTime;
+
+        // Enforce min & max speed
+        DesiredSpeedAlongSlope = Mathf.Clamp(
+            DesiredSpeedAlongSlope,
+            m_MinSpeedAlongSlope,
+            m_MaxSpeedAlongSlope
+        );
+
+        //// Preserve perpendicular velocity (jump / bumps)
+        // Vector2 perpendicularVelocity =
+        //     velocity - slopeDir * Vector2.Dot(velocity, slopeDir);
+
+        // Rebuild final velocity
+        m_rb.velocity = moveDirection * DesiredSpeedAlongSlope;
     }
+
 
     void HandleJumpInput()
     {
@@ -210,7 +247,7 @@ public class PlayerController : MonoBehaviour
             m_rb.velocity = new Vector2(m_rb.velocity.x, m_jumpVelocity);
 
             m_isGrounded = false;
-            m_isJumping = true; // Jump temporarily owns grounding
+            m_isJumping = true;
             m_airTime = 0f;
         }
     }
@@ -221,15 +258,11 @@ public class PlayerController : MonoBehaviour
 
     void HandleAirRotation()
     {
-        if (m_isGrounded)
-            return;
-
         if (Input.GetMouseButton(0))
         {
             float rotationThisFrame =
                 m_BackFlipRotSpeed * Time.deltaTime;
 
-            // Visual-only rotation
             transform.Rotate(0f, 0f, rotationThisFrame);
             m_airRotationAccumulated += rotationThisFrame;
         }
@@ -238,8 +271,7 @@ public class PlayerController : MonoBehaviour
             float rotationThisFrame =
                 m_FwFlipRotSpeed * Time.deltaTime;
 
-            // Visual-only rotation
-            transform.Rotate(0f, 0f, - rotationThisFrame);
+            transform.Rotate(0f, 0f, -rotationThisFrame);
         }
     }
 
@@ -297,7 +329,7 @@ public class PlayerController : MonoBehaviour
         m_airTime = 0f;
         m_airRotationAccumulated = 0f;
         m_timeSinceCrash = 0f;
-        m_timeSinceLastGroundContact = 0f; // NEW
+        m_timeSinceLastGroundContact = 0f;
 
         transform.position = startPosition;
         transform.rotation = Quaternion.identity;
@@ -321,13 +353,12 @@ public class PlayerController : MonoBehaviour
         {
             m_groundNormal = contact.normal;
             m_isGrounded = true;
-            m_timeSinceLastGroundContact = 0f; // NEW
+            m_timeSinceLastGroundContact = 0f;
         }
     }
 
     void OnCollisionStay2D(Collision2D collision)
     {
-        // Ignore collision-based grounding during jump takeoff
         if (m_isJumping)
             return;
 
@@ -340,14 +371,8 @@ public class PlayerController : MonoBehaviour
         {
             m_groundNormal = contact.normal;
             m_isGrounded = true;
-            m_timeSinceLastGroundContact = 0f; // NEW
+            m_timeSinceLastGroundContact = 0f;
         }
-    }
-
-    void OnCollisionExit2D(Collision2D collision)
-    {
-        // Intentionally empty:
-        // Grounded state is released via time-based hysteresis
     }
 
     /* =============================
